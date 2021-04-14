@@ -2,7 +2,7 @@
 
 aws_config_file="aws-config"
 operation="certonly"
-config_path="/etc/letsencrypt"
+config_path="/private/etc/letsencrypt"
 
 usage() {
     echo "Usage: $0 [ -r ] [ -c AWS_CONFIG_FILE ] [ -p CONFIG_PATH ] [ -d DOMAIN [ -d DOMAIN [ ... ]]]" 1>&2
@@ -50,15 +50,37 @@ fi
 mkdir -p $config_path
 cp $aws_config_file $config_path/aws-config
 
-docker pull certbot/dns-route53
+docker pull certbot/dns-route53:v1.14.0
 
 echo "Running Certbot"
+# docker run -it --rm --name certbot \
+#     --env AWS_CONFIG_FILE=/etc/letsencrypt/aws-config \
+#     -v "${config_path}:/etc/letsencrypt" \
+#     -v "/var/lib/letsencrypt:/var/lib/letsencrypt" \
+#     certbot/dns-route53 \
+#     --server https://acme-v02.api.letsencrypt.org/directory \
+#     --dns-route53 \
+#     $operation \
+#     ${domains[@]}
+
+    # --config-dir "./letsencrypt" \
+    # --work-dir "./letsencrypt" \
+    # --logs-dir "./letsencrypt" \
+
+# TODO: Reduce this down to just single or two calls.
+# BUG: --domains does not work. Probably bc zsh.
 docker run -it --rm --name certbot \
-    --env AWS_CONFIG_FILE=/etc/letsencrypt/aws-config \
-    -v "${config_path}:/etc/letsencrypt" \
-    -v "/var/lib/letsencrypt:/var/lib/letsencrypt" \
+    -v "/xdata/_prj/docker-certbot-route53/aws-config:/root/.aws/credentials" \
+    -v "/xdata/_prj/docker-certbot-route53/certs:/etc/letsencrypt" \
+    -v "/private/var/lib/letsencrypt:/var/lib/letsencrypt" \
     certbot/dns-route53 \
     --server https://acme-v02.api.letsencrypt.org/directory \
     --dns-route53 \
+    --agree-tos \
+    --config-dir "/etc/letsencrypt" \
+    --work-dir "/etc/letsencrypt" \
+    --logs-dir "/etc/letsencrypt" \
+    --email noi.narisak@gmail.com \
     $operation \
+    # --domains narisaklabs.com,login.narisaklabs.com
     ${domains[@]}
