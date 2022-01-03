@@ -71,8 +71,13 @@ if [ ! -f "${output_certbot_folder}" ]; then
     mkdir ${output_certbot_folder}
 fi
 
+if ! docker info > /dev/null 2>&1 ; then
+    echo "Script requires docker running, which it is not!"
+    exit 1
+fi
+
 echo "Getting certbot/dns-route53 docker image:"
-docker pull certbot/dns-route53:v1.14.0
+docker pull certbot/dns-route53:latest
 
 echo "Running Certbot:"
 docker run -it --rm --name certbot \
@@ -91,14 +96,21 @@ docker run -it --rm --name certbot \
     --domains "${CERTBOT_DOMAINS}" \
     $operation
 
-DATARAW=$(echo '{}' | jq --arg privkey "$(<${certbot_full_path}/privkey.pem)" --arg cert "$(<${certbot_full_path}/cert.pem)" '{"type": "PEM", "privateKey": $privkey, "certificate": $cert}')
+DATARAW=$(echo '{}' | jq --arg privkey "$(<${certbot_full_path}/privkey.pem)" --arg cert "$(<${certbot_full_path}/cert.pem)" --arg certchain "$(<${certbot_full_path}/chain.pem)" '{"type": "PEM", "privateKey": $privkey, "certificate": $cert, "certificateChain": $certchain }')
 
 echo "Raw JSON Payload:"
 echo $DATARAW
 
 echo "Update Okta Custom Domain:"
 curl --location --request PUT "https://${OKTA_ORG_NAME}.${OKTA_BASE_URL}/api/v1/domains/${OKTA_DOMAIN_ID}/certificate" \
---header 'Accept: application/json' \
---header 'Content-Type: application/json' \
---header "Authorization: SSWS ${OKTA_API_TOKEN}" \
---data-raw "$DATARAW"
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: SSWS ${OKTA_API_TOKEN}" \
+    --data-raw "$DATARAW"
+
+echo "New Expired Date:"
+curl --location --request POST "https://${OKTA_ORG_NAME}.${OKTA_BASE_URL}/api/v1/domains/${OKTA_DOMAIN_ID}/verify" \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/json' \
+    --header "Authorization: SSWS ${OKTA_API_TOKEN}" \
+    | jq '.["publicCertificate"].expiration'
